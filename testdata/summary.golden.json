@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "event_uuid": "bcbdd0a3-b3b7-32e2-b94a-6162ecf2c9a9",
+  "counts": {
+    "orders": 63,
+    "tickets": 130
+  },
+  "orders_by_state": {
+    "PAID": 63
+  },
+  "ticket_groups": {
+    "Blind Bird": {
+      "count": 79,
+      "income_ex_vat": 94736.79999999987
+    },
+    "Community Sponsor": {
+      "count": 7,
+      "income_ex_vat": 83994.4
+    },
+    "Early blind bird": {
+      "count": 15,
+      "income_ex_vat": 11988.000000000002
+    },
+    "Hoodie Black": {
+      "count": 1,
+      "income_ex_vat": 279.2
+    },
+    "Hoodie Blue Navy": {
+      "count": 1,
+      "income_ex_vat": 279.2
+    },
+    "Hoodie Zip Black": {
+      "count": 2,
+      "income_ex_vat": 558.4
+    },
+    "Sponsors and other free tickets": {
+      "count": 21,
+      "income_ex_vat": 0
+    },
+    "T-shirt Green - 3XL": {
+      "count": 1,
+      "income_ex_vat": 140
+    },
+    "T-shirt Green - L": {
+      "count": 1,
+      "income_ex_vat": 140
+    },
+    "T-shirt Green - XL": {
+      "count": 2,
+      "income_ex_vat": 280
+    }
+  },
+  "tshirt_sizes": {
+    "small": 6,
+    "medium": 26,
+    "large": 36,
+    "xl": 29,
+    "2xl": 11,
+    "3xl": 9
+  },
+  "merch": {
+    "Hoodie Black": {
+      "small": 0,
+      "medium": 0,
+      "large": 0,
+      "xl": 0,
+      "2xl": 1,
+      "3xl": 0
+    },
+    "Hoodie Blue Navy": {
+      "small": 0,
+      "medium": 0,
+      "large": 0,
+      "xl": 1,
+      "2xl": 0,
+      "3xl": 0
+    },
+    "Hoodie Zip Black": {
+      "small": 0,
+      "medium": 0,
+      "large": 1,
+      "xl": 0,
+      "2xl": 1,
+      "3xl": 0
+    }
+  }
+}

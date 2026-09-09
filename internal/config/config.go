@@ -65,7 +65,7 @@ func Load() (Config, error) {
 		Bucket:            os.Getenv("SNAPSHOT_BUCKET"),
 		Object:            env("SNAPSHOT_OBJECT", "snapshot.json.gz"),
 		APITokens:         splitList(os.Getenv("API_TOKENS")),
-		MerchNamePatterns: lower(splitListDefault(os.Getenv("MERCH_NAME_PATTERNS"), "hoodie")),
+		MerchNamePatterns: ParseMerchPatterns(os.Getenv("MERCH_NAME_PATTERNS")),
 	}
 
 	var err error
@@ -137,15 +137,32 @@ func duration(key string, def time.Duration) (time.Duration, error) {
 }
 
 func ints(key string) ([]int, error) {
+	out, err := ParseIntList(os.Getenv(key))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", key, err)
+	}
+	return out, nil
+}
+
+// ParseIntList parses a comma-separated list of integers. Exported so that tooling
+// reading the same setting from somewhere other than the environment — the verify
+// command reads it from a flag — cannot drift from how the service reads it.
+func ParseIntList(s string) ([]int, error) {
 	var out []int
-	for _, s := range splitList(os.Getenv(key)) {
-		n, err := strconv.Atoi(s)
+	for _, part := range splitList(s) {
+		n, err := strconv.Atoi(part)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %q is not a number", key, s)
+			return nil, fmt.Errorf("%q is not a number", part)
 		}
 		out = append(out, n)
 	}
 	return out, nil
+}
+
+// ParseMerchPatterns parses the merchandise-matching substrings, falling back to the
+// single pattern the old Apps Script hardcoded.
+func ParseMerchPatterns(s string) []string {
+	return lower(splitListDefault(s, "hoodie"))
 }
 
 func splitList(s string) []string {
