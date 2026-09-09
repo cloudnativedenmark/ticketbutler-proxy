@@ -1,0 +1,12 @@
+version: "2"
+
+# The default linter set, with one exclusion.
+linters:
+  exclusions:
+    rules:
+      # errcheck flags every `defer f.Close()`. On a read path there is nothing
+      # useful to do with that error, and wrapping each one in a closure to
+      # discard it explicitly is noise. Close errors on a write path do matter,
+      # and those are not deferred in this codebase.
+      - linters: [errcheck]
+        source: '^\s*defer .*\.Close\(\)$'

@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: go vet ./...
+
+      - run: go build ./...
+
+      # -race because the refresh loop and the request handlers share the snapshot.
+      - run: go test -race ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+
+  image:
+    name: Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Build only. Publishing happens in release.yml, after this has passed on main.
+      # linux/amd64 because that is what Cloud Run runs, so it is what CI must prove
+      # builds.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  fixture:
+    name: Fixture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # verify_fixture.py cannot run here: it diffs the fixture against the real
+      # payload, which contains attendee personal data and is not in this
+      # repository. This checks the invariants the anonymizer guarantees instead,
+      # which catches the accident that actually matters -- someone committing a
+      # real payload over the fixture.
+      - name: Check the fixture is anonymized JSON
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          path = "testdata/orders.sample.json"
+          with open(path, encoding="utf-8") as fh:
+              doc = json.load(fh)
+
+          if not isinstance(doc.get("orders"), list):
+              sys.exit(f"{path}: expected an object with an 'orders' array")
+
+          # testdata/anonymize.py puts every address in a reserved domain: emails
+          # under .example and ticket URLs under example.invalid, both of which
+          # RFC 2606 and RFC 6761 set aside and neither of which can be a real
+          # attendee. Asserting that positively beats blocklisting known-real
+          # values, which only catches the payloads someone thought to list.
+          bad = []
+
+          def walk(node):
+              if isinstance(node, dict):
+                  for key, value in node.items():
+                      if key == "email" and isinstance(value, str) and value:
+                          if not value.endswith(".example"):
+                              bad.append(f"email {value!r}")
+                      elif key == "ticket_download_absolute_url" and isinstance(value, str) and value:
+                          if not value.startswith("https://example.invalid/"):
+                              bad.append(f"ticket url {value!r}")
+                      else:
+                          walk(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      walk(value)
+
+          walk(doc)
+          if bad:
+              for item in bad[:10]:
+                  print(f"  {item}", file=sys.stderr)
+              sys.exit(
+                  f"{path}: {len(bad)} address(es) are outside the reserved "
+                  "domains, so this is not the anonymized fixture. Regenerate it "
+                  "with: make fixture REAL_ORDERS=/path/to/orders.json"
+              )
+
+          print(f"{path}: {len(doc['orders'])} orders, every address in a reserved domain")
+          PY

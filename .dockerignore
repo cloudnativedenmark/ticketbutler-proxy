@@ -1,0 +1,30 @@
+# The build only needs go.mod, go.sum and the Go source. Everything else either
+# cannot be in the image or would invalidate the build cache for no reason.
+
+.git/
+.github/
+.gitignore
+.dockerignore
+
+# testdata/orders.sample.json is 770 KB of fixture the binary never reads at
+# runtime, and the two Python helpers are developer tools.
+testdata/
+
+appsscript/
+deploy/
+*.md
+
+# Same exclusions as .gitignore, so a stray local payload or credential file cannot
+# reach the build context even if someone has one lying around.
+orders.json
+orders*.json
+*credentials*.json
+*-key.json
+*.pem
+.env
+.env.*
+
+# Build output. Copying a host binary in would defeat the cross-compile.
+/tbproxy
+/dist/
+coverage.out

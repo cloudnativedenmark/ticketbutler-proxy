@@ -1,0 +1,20 @@
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Watches the two base images in the Dockerfile. distroless/static gets CVE
+  # fixes without a tag change, so this only catches the golang bumps, but that
+  # is the half that matters for the build.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
