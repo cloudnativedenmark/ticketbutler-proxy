@@ -222,3 +222,58 @@ func TestTicketAnswerHelpers(t *testing.T) {
 		t.Errorf("FirstChoice = %q, want empty for an unanswered question", got)
 	}
 }
+
+// TestFetchOrdersDoesNotRetryOriginTimeouts is a load-consideration test as much as
+// a correctness one. A Cloudflare 524 means the TicketButler origin already spent
+// 120 seconds failing to answer; retrying immediately would add load to a service
+// that is visibly struggling, and the next scheduled refresh is the better retry.
+func TestFetchOrdersDoesNotRetryOriginTimeouts(t *testing.T) {
+	for _, status := range []int{520, 522, 523, 524} {
+		var calls atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"title":"Error 524: A timeout occurred"}`))
+		}))
+
+		client := newTestClient(srv.URL)
+		client.Attempts = 3
+		_, err := client.FetchOrders(context.Background())
+		srv.Close()
+
+		if err == nil {
+			t.Errorf("status %d: expected an error", status)
+			continue
+		}
+		var upstream *ErrUpstream
+		if !errors.As(err, &upstream) || !upstream.OriginExhausted() {
+			t.Errorf("status %d: error = %v, want an origin-exhausted *ErrUpstream", status, err)
+		}
+		if got := calls.Load(); got != 1 {
+			t.Errorf("status %d: made %d calls, want 1", status, got)
+		}
+	}
+}
+
+// TestFetchOrdersStillRetriesOrdinaryServerErrors keeps the exception narrow: a plain
+// 500 or 502 is worth one more try, it is only the origin-timeout family that is not.
+func TestFetchOrdersStillRetriesOrdinaryServerErrors(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) < 2 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write([]byte(onePaidOrder))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL)
+	client.Attempts = 3
+	if _, err := client.FetchOrders(context.Background()); err != nil {
+		t.Fatalf("FetchOrders: %v", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("made %d calls, want 2", got)
+	}
+}

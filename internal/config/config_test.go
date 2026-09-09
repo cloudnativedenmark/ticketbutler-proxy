@@ -44,8 +44,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.UpstreamTimeout != 10*time.Minute {
 		t.Errorf("UpstreamTimeout = %v, want 10m: the whole point is exceeding the 60s Apps Script limit", cfg.UpstreamTimeout)
 	}
-	if cfg.StaleAfter != 30*time.Minute {
-		t.Errorf("StaleAfter = %v, want 30m", cfg.StaleAfter)
+	if cfg.StaleAfter != 90*time.Minute {
+		t.Errorf("StaleAfter = %v, want 90m: three 30-minute refresh cycles", cfg.StaleAfter)
+	}
+	if cfg.UpstreamAttempts != 3 {
+		t.Errorf("UpstreamAttempts = %d, want 3", cfg.UpstreamAttempts)
 	}
 	if cfg.Object != "snapshot.json.gz" {
 		t.Errorf("Object = %q, want snapshot.json.gz", cfg.Object)

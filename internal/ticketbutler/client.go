@@ -55,6 +55,27 @@ func (e *ErrUpstream) Error() string {
 	return fmt.Sprintf("ticketbutler returned %d: %s", e.StatusCode, e.Body)
 }
 
+// OriginExhausted reports a status that means the TicketButler origin could not
+// answer in time, rather than that anything is wrong with our request.
+//
+// TicketButler sits behind Cloudflare, which gives up on the origin after 120
+// seconds and returns 524. So a longer timeout on this side cannot help: past 120
+// seconds the answer is a 524 however patient the client is. The related 520, 522
+// and 523 mean much the same thing.
+//
+// These are not retried inside a single refresh. The origin has just spent two
+// minutes failing to produce a response, and asking again immediately adds load to
+// a service that is already struggling without any plausible payoff. The next
+// scheduled refresh is the retry.
+func (e *ErrUpstream) OriginExhausted() bool {
+	switch e.StatusCode {
+	case 520, 522, 523, 524:
+		return true
+	default:
+		return false
+	}
+}
+
 // Result is one successful fetch, with how long the fetch took. The duration is
 // carried through to the API responses because it is the number that says how close
 // the upstream is to being unusable again.
@@ -100,8 +121,16 @@ func (c *Client) FetchOrders(ctx context.Context) (Result, error) {
 		}
 
 		var upstream *ErrUpstream
-		if errors.As(err, &upstream) && upstream.StatusCode < 500 {
-			return Result{}, err
+		if errors.As(err, &upstream) {
+			if upstream.StatusCode < 500 {
+				// A rejected token is rejected just as firmly on the third attempt.
+				return Result{}, err
+			}
+			if upstream.OriginExhausted() {
+				log.Warn("giving up this refresh: the ticketbutler origin timed out, so retrying now would only add load",
+					"status", upstream.StatusCode, "attempt", attempt)
+				return Result{}, err
+			}
 		}
 		if ctx.Err() != nil {
 			return Result{}, errors.Join(err, ctx.Err())
@@ -111,9 +140,11 @@ func (c *Client) FetchOrders(ctx context.Context) (Result, error) {
 		log.Warn("fetching orders failed", "attempt", attempt, "of", attempts, "error", err)
 
 		if attempt < attempts {
-			// 1s, 2s, 4s … long enough to ride out a blip, short enough that the
-			// whole retry budget still fits inside the request timeout.
-			backoff := time.Second << (attempt - 1)
+			// 30s, 60s, 120s … Deliberately slow. A fast retry against an upstream
+			// that has just failed adds load exactly when it is least welcome, and
+			// nothing here is urgent: the previous snapshot is still being served
+			// and the next scheduled refresh is minutes away either way.
+			backoff := 30 * time.Second << (attempt - 1)
 			if err := c.sleepFor(ctx, backoff); err != nil {
 				return Result{}, errors.Join(lastErr, err)
 			}

@@ -16,15 +16,45 @@ smaller request to make. The payload also repeats the entire event question sche
 on every ticket, which is most of its size.
 
 This service moves the slow call somewhere that is allowed to be slow. Cloud
-Scheduler triggers a refresh every 10 minutes; the service fetches the orders with a
-10-minute timeout, aggregates them into the numbers the sheets need, and stores a
+Scheduler triggers a refresh every 30 minutes; the service fetches the orders with a
+long timeout, aggregates them into the numbers the sheets need, and stores a
 snapshot in Cloud Storage. Apps Script then reads pre-computed numbers in well under
 a second.
+
+### There is a second ceiling above the first
+
+Measured against the live event on 2026-09-09, `/orders/` did not merely take longer
+than 60 seconds. It returned **HTTP 524** on every attempt:
+
+> Error 524: A timeout occurred. The origin web server did not return a complete
+> response within the 120-second Proxy Read Timeout window.
+
+TicketButler sits behind Cloudflare, which abandons the origin after 120 seconds. So
+a patient client is necessary but not sufficient: past 120 seconds the answer is a
+524 no matter how long this service is willing to wait, and no amount of retrying
+changes that. Meanwhile `/api/v3/events/{event}/tickets/` answered in 0.34 seconds
+with all 251 tickets — but it carries only names, emails and ticket type names, with
+no prices, VAT, company names or question answers, so it cannot feed the sheets.
+
+Two consequences shape this service:
+
+- **It never makes the upstream problem worse.** A 524 is not retried within a
+  refresh; the origin has just spent two minutes failing, and asking again
+  immediately adds load for no plausible gain. The next scheduled refresh is the
+  retry. Ordinary 5xx responses are retried, with a 30-second minimum backoff.
+- **A failed refresh is not a failed read.** The previous snapshot keeps being
+  served, flagged `stale` once it passes `STALE_AFTER`, so the sheets show the last
+  good numbers with a warning rather than nothing.
+
+If `/orders/` stays in this state, the fix is on TicketButler's side — a paginated
+or filtered orders endpoint, or a raised origin timeout — and is worth raising with
+support@ticketbutler.io. This service is what makes that outage survivable rather
+than a fix for it.
 
 ## Architecture
 
 ```
-  Refresh path (every 10 minutes, up to 10 minutes per fetch)
+  Refresh path (every 30 minutes; Cloudflare cuts a fetch off at 120s)
 
     Cloud Scheduler --POST /v1/refresh--> Cloud Run: tbproxy
                                                 |
@@ -123,11 +153,12 @@ All configuration is environment variables, read by `internal/config/config.go`.
 | `TICKETBUTLER_EVENT_UUID` | none, required                              | Event to fetch orders for.                                                         |
 | `TICKETBUTLER_TOKEN`      | none                                        | TicketButler API token. Required unless `TICKETBUTLER_FILE` is set.                |
 | `TICKETBUTLER_FILE`       | none                                        | Read this JSON file instead of calling the API. For development and CI.            |
-| `UPSTREAM_TIMEOUT`        | `10m`                                       | Limit on a single upstream fetch. This is the limit Apps Script could not raise.   |
+| `UPSTREAM_TIMEOUT`        | `10m`                                       | Limit on one upstream fetch attempt. Cloudflare cuts the origin off at 120s first. |
+| `UPSTREAM_ATTEMPTS`       | `3`                                         | Attempts per refresh. A 524 stops early; the backoff is 30s and doubles.           |
 | `API_TOKENS`              | none, required                              | Comma-separated accepted bearer tokens, minimum 16 characters each.                |
 | `SNAPSHOT_BUCKET`         | none                                        | Cloud Storage bucket for the snapshot. Empty keeps the snapshot in memory only.    |
 | `SNAPSHOT_OBJECT`         | `snapshot.json.gz`                          | Object name within the bucket.                                                     |
-| `STALE_AFTER`             | `30m`                                       | Age at which responses report `stale: true`.                                       |
+| `STALE_AFTER`             | `90m`                                       | Age at which responses report `stale: true`. Three 30-minute refresh cycles.       |
 | `SPONSOR_TICKET_TYPE_PKS` | none                                        | Comma-separated ticket type ids counted as community sponsors. Currently `183067`. |
 | `MERCH_NAME_PATTERNS`     | `hoodie`                                    | Comma-separated lower-case substrings that mark a ticket type as merchandise.      |
 

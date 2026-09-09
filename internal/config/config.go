@@ -28,9 +28,17 @@ type Config struct {
 	// API. It exists so development and CI need neither a token nor network access.
 	File string
 
-	// UpstreamTimeout is how long a single fetch may take. The whole point of this
-	// service is that this can exceed the 60s ceiling Apps Script imposes.
+	// UpstreamTimeout is how long a single fetch attempt may take. This can exceed
+	// the 60s ceiling Apps Script imposes, but note that TicketButler sits behind
+	// Cloudflare with a 120s proxy read timeout: past that the attempt comes back
+	// as HTTP 524 no matter how patient this side is.
 	UpstreamTimeout time.Duration
+
+	// UpstreamAttempts is how many times a refresh retries before giving up. An
+	// attempt against a struggling orders endpoint costs the full Cloudflare 120s,
+	// so this multiplied by UpstreamTimeout has to stay inside the Cloud Run
+	// request timeout.
+	UpstreamAttempts int
 
 	// APITokens are the accepted bearer tokens. Several are allowed at once so a
 	// token can be rotated without a window where neither value works.
@@ -44,6 +52,9 @@ type Config struct {
 	// StaleAfter is the age at which a snapshot is reported as stale. Responses stay
 	// served past it — a stale number with a warning beats no number at all — but
 	// the flag lets the caller say so.
+	//
+	// The default allows for a refresh running every 30 minutes and missing two of
+	// them, so a single failed fetch does not cry stale.
 	StaleAfter time.Duration
 
 	// SponsorTicketTypePKs are the ticket type ids counted as community sponsors.
@@ -72,10 +83,13 @@ func Load() (Config, error) {
 	if c.UpstreamTimeout, err = duration("UPSTREAM_TIMEOUT", 10*time.Minute); err != nil {
 		return Config{}, err
 	}
-	if c.StaleAfter, err = duration("STALE_AFTER", 30*time.Minute); err != nil {
+	if c.StaleAfter, err = duration("STALE_AFTER", 90*time.Minute); err != nil {
 		return Config{}, err
 	}
 	if c.SponsorTicketTypePKs, err = ints("SPONSOR_TICKET_TYPE_PKS"); err != nil {
+		return Config{}, err
+	}
+	if c.UpstreamAttempts, err = positiveInt("UPSTREAM_ATTEMPTS", 3); err != nil {
 		return Config{}, err
 	}
 
@@ -134,6 +148,21 @@ func duration(key string, def time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be positive, got %s", key, v)
 	}
 	return d, nil
+}
+
+func positiveInt(key string, def int) (int, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %q is not a number", key, v)
+	}
+	if n < 1 {
+		return 0, fmt.Errorf("%s must be at least 1, got %d", key, n)
+	}
+	return n, nil
 }
 
 func ints(key string) ([]int, error) {

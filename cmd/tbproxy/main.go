@@ -110,11 +110,12 @@ func build(ctx context.Context, log *slog.Logger) (config.Config, *snapshot.Refr
 
 	refresher := &snapshot.Refresher{
 		Fetcher: &ticketbutler.Client{
-			URL:     cfg.OrdersURL(),
-			Token:   cfg.Token,
-			File:    cfg.File,
-			Timeout: cfg.UpstreamTimeout,
-			Log:     log,
+			URL:      cfg.OrdersURL(),
+			Token:    cfg.Token,
+			File:     cfg.File,
+			Timeout:  cfg.UpstreamTimeout,
+			Attempts: cfg.UpstreamAttempts,
+			Log:      log,
 		},
 		Store: snapshotStore,
 		Options: aggregate.Options{

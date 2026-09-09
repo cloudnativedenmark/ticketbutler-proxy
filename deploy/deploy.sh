@@ -46,7 +46,7 @@ EVENT_UUID="${TICKETBUTLER_EVENT_UUID-11cc0a9f7f124ddcb11bc027e1a64f23}"
 BASE_URL="${TICKETBUTLER_BASE_URL:-https://cloudnativedenmark.ticketbutler.io}"
 SNAPSHOT_OBJECT="${SNAPSHOT_OBJECT:-snapshot.json.gz}"
 UPSTREAM_TIMEOUT="${UPSTREAM_TIMEOUT:-10m}"
-STALE_AFTER="${STALE_AFTER:-30m}"
+STALE_AFTER="${STALE_AFTER:-90m}"
 # Empty here would leave /v1/sponsors reporting nothing, with no error to explain
 # why, so the current event's community sponsor ticket type is the default.
 SPONSOR_TICKET_TYPE_PKS="${SPONSOR_TICKET_TYPE_PKS:-183067}"

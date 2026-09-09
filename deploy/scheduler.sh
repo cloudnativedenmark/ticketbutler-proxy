@@ -4,15 +4,21 @@
 #
 #   ./deploy/scheduler.sh
 #
-# The job POSTs to /v1/refresh every ten minutes. The refresh is what takes
-# minutes upstream; Apps Script only ever reads the finished snapshot.
+# The job POSTs to /v1/refresh every thirty minutes. The refresh is the slow part;
+# Apps Script only ever reads the finished snapshot.
+#
+# Thirty rather than ten: ticket sales do not move fast enough for the difference to
+# matter on a spreadsheet, and the orders endpoint is currently struggling enough to
+# spend two minutes on a request before Cloudflare gives up on it. Asking less often
+# is the considerate default. Lower it with SCHEDULE= if the upstream recovers and
+# fresher numbers actually turn out to be useful.
 set -euo pipefail
 
 PROJECT="${PROJECT:-automation-472811}"
 REGION="${REGION:-europe-north1}"
 SERVICE="${SERVICE:-tbproxy}"
 JOB="${JOB:-tbproxy-refresh}"
-SCHEDULE="${SCHEDULE:-*/10 * * * *}"
+SCHEDULE="${SCHEDULE:-*/30 * * * *}"
 
 SCHEDULER_SA="${SCHEDULER_SA:-tbproxy-scheduler@${PROJECT}.iam.gserviceaccount.com}"
 SECRET_API_TOKENS="${SECRET_API_TOKENS:-tbproxy-api-tokens}"
