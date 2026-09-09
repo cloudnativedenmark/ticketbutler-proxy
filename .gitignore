@@ -1,0 +1,18 @@
+# Never commit the real TicketButler payload — it contains attendee names,
+# emails and phone numbers. Only testdata/orders.sample.json (anonymized) belongs
+# in this repository.
+orders.json
+orders*.json
+!testdata/orders.sample.json
+
+# Credentials
+*credentials*.json
+*-key.json
+*.pem
+.env
+.env.*
+
+# Build output
+/tbproxy
+/dist/
+coverage.out
