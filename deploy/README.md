@@ -9,7 +9,7 @@ command before running it.
 | --- | --- |
 | `setup.sh` | One-time bootstrap: APIs, bucket, service accounts, IAM, secrets. Re-runnable. |
 | `deploy.sh` | Deploy an image digest to Cloud Run. |
-| `scheduler.sh` | Create or update the ten-minute refresh job. |
+| `scheduler.sh` | Create or update the scheduled refresh job. |
 
 ## First time
 
@@ -38,6 +38,16 @@ create the scheduler job:
 ```sh
 ./deploy/scheduler.sh
 ```
+
+The default schedule runs every 30 minutes. Set `SCHEDULE` to another cron expression
+when creating or updating the job:
+
+```sh
+SCHEDULE='*/15 * * * *' ./deploy/scheduler.sh
+```
+
+This setting is separate from `STALE_AFTER`, which only determines when a stored
+snapshot is reported as stale.
 
 ## Deploying
 
