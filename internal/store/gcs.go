@@ -35,7 +35,10 @@ func NewGCS(ctx context.Context, bucket, object string) (*GCS, error) {
 
 // Load reads the stored object, returning ErrNotFound when it does not exist yet.
 func (g *GCS) Load(ctx context.Context) ([]byte, error) {
-	reader, err := g.client.Bucket(g.bucket).Object(g.object).NewReader(ctx)
+	// Save marks the object as gzip-encoded. Cloud Storage normally decompresses
+	// such objects while reading, but snapshot.Decode expects the stored gzip bytes.
+	object := g.client.Bucket(g.bucket).Object(g.object).ReadCompressed(true)
+	reader, err := object.NewReader(ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
 		return nil, ErrNotFound
 	}

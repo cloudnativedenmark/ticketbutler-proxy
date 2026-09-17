@@ -14,8 +14,8 @@ import (
 	"github.com/cloudnativedenmark/ticketbutler-proxy/internal/ticketbutler"
 )
 
-// Snapshot is the result of one refresh: the raw orders, plus everything computed
-// from them, so a read never has to recompute anything.
+// Snapshot is the result of one refresh: the modelled order fields, plus everything
+// computed from them, so a read never has to recompute anything.
 type Snapshot struct {
 	FetchedAt        time.Time `json:"fetched_at"`
 	SourceDurationMS int64     `json:"source_duration_ms"`

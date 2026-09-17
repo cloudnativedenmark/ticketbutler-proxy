@@ -10,13 +10,23 @@ import (
 	"github.com/cloudnativedenmark/ticketbutler-proxy/internal/ticketbutler"
 )
 
-// handleHealth answers whether the process is up, and separately whether it has data
-// to serve. A service that is running but has never refreshed is healthy and not yet
-// ready, and conflating the two would make Cloud Run restart an instance that is
-// only waiting for its first scheduled refresh.
+// handleHealth answers whether the process can access its snapshot. A missing
+// snapshot is a valid state before the first refresh. Other storage failures make
+// the service unhealthy because its data endpoints cannot work either.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{"status": "ok", "snapshot": "missing"}
-	if snap, err := s.refresher.Current(r.Context()); err == nil {
+	snap, err := s.refresher.Current(r.Context())
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		// The service is waiting for its first scheduled refresh.
+	case err != nil:
+		s.log.Error("health check could not read the stored snapshot", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"status":   "error",
+			"snapshot": "unavailable",
+		})
+		return
+	default:
 		m := s.metaFor(snap)
 		body["snapshot"] = "present"
 		body["fetched_at"] = m.FetchedAt
@@ -67,9 +77,9 @@ type ordersResponse struct {
 	Orders ticketbutler.OrdersResponse `json:"orders"`
 }
 
-// handleOrders serves the cached upstream payload unchanged, for scripts that need a
-// field the summary does not carry. It contains every attendee's name, email address
-// and employer, plus their free-text answers.
+// handleOrders serves the cached fields modelled by the service for scripts that need
+// more than the summary. It contains attendee names, email addresses, employers and
+// free-text answers, but omits unused upstream fields.
 func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 	snap, ok := s.snapshotOr503(w, r)
 	if !ok {

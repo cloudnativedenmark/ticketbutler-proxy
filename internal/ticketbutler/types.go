@@ -48,7 +48,7 @@ type Address struct {
 
 // OrderLine is a basket line: a ticket type and a quantity. The per-attendee detail
 // lives in Order.Tickets, so the aggregation works from those instead — order lines
-// are carried through only for the raw passthrough endpoint.
+// are carried through only for the cached orders endpoint.
 type OrderLine struct {
 	UUID                    string  `json:"uuid"`
 	Title                   string  `json:"title"`
@@ -164,8 +164,8 @@ func (a *Amount) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// MarshalJSON writes the amount back as a decimal string, so a raw passthrough
-// response keeps the same shape the upstream API used.
+// MarshalJSON writes the amount back as a decimal string, matching the upstream
+// representation in the cached orders response.
 func (a Amount) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + strconv.FormatFloat(float64(a), 'f', 2, 64) + `"`), nil
 }

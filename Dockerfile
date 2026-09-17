@@ -36,6 +36,7 @@ LABEL org.opencontainers.image.source="https://github.com/cloudnativedenmark/tic
       org.opencontainers.image.description="Caching proxy that serves aggregated TicketButler order data to Google Apps Script"
 
 COPY --from=build /out/tbproxy /tbproxy
+COPY LICENSE /usr/share/licenses/ticketbutler-proxy/LICENSE
 
 USER nonroot:nonroot
 EXPOSE 8080

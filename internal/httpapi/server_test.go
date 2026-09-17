@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,6 +29,15 @@ type stubFetcher struct {
 func (s *stubFetcher) FetchOrders(context.Context) (ticketbutler.Result, error) {
 	return s.result, s.err
 }
+
+type stubStore struct {
+	data []byte
+	err  error
+}
+
+func (s stubStore) Load(context.Context) ([]byte, error) { return s.data, s.err }
+func (stubStore) Save(context.Context, []byte) error     { return nil }
+func (stubStore) Describe() string                       { return "stub test store" }
 
 func sampleResult() ticketbutler.Result {
 	return ticketbutler.Result{
@@ -131,6 +141,34 @@ func TestHealthzNeedsNoToken(t *testing.T) {
 	}
 }
 
+func TestHealthzReportsSnapshotFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		store store.Store
+	}{
+		{"storage error", stubStore{err: errors.New("storage unavailable")}},
+		{"invalid snapshot", stubStore{data: []byte("not gzip")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Config{APITokens: []string{token}, StaleAfter: 30 * time.Minute}
+			refresher := &snapshot.Refresher{
+				Fetcher: &stubFetcher{result: sampleResult()},
+				Store:   tc.store,
+			}
+			handler := httpapi.New(cfg, refresher, nil, func() time.Time { return fetchedAt }).Handler()
+
+			rec := do(t, handler, http.MethodGet, "/healthz", nil)
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503 (body %s)", rec.Code, rec.Body.String())
+			}
+			body := decode(t, rec)
+			if body["status"] != "error" || body["snapshot"] != "unavailable" {
+				t.Errorf("body = %v, want error and unavailable", body)
+			}
+		})
+	}
+}
+
 func TestSummaryBeforeAnyRefresh(t *testing.T) {
 	handler, _ := newServer(t, fetchedAt, &stubFetcher{result: sampleResult()})
 	rec := do(t, handler, http.MethodGet, "/v1/summary", authed())
@@ -230,7 +268,7 @@ func TestSponsors(t *testing.T) {
 	}
 }
 
-func TestOrdersPassthrough(t *testing.T) {
+func TestOrdersResponse(t *testing.T) {
 	handler, refresher := newServer(t, fetchedAt, &stubFetcher{result: sampleResult()})
 	if _, err := refresher.Refresh(context.Background()); err != nil {
 		t.Fatalf("seeding a snapshot: %v", err)
@@ -241,12 +279,12 @@ func TestOrdersPassthrough(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-		t.Errorf("Cache-Control = %q, want no-store on the raw attendee payload", got)
+		t.Errorf("Cache-Control = %q, want no-store on the attendee payload", got)
 	}
 	body := decode(t, rec)
 	orders, ok := body["orders"].(map[string]any)
 	if !ok {
-		t.Fatalf("orders = %v, want the upstream payload", body["orders"])
+		t.Fatalf("orders = %v, want the modelled order fields", body["orders"])
 	}
 	if orders["uuid"] != "event-uuid" {
 		t.Errorf("uuid = %v, want the upstream event uuid preserved", orders["uuid"])

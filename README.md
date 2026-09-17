@@ -88,10 +88,10 @@ its own OIDC token in `Authorization` while the service token travels in
 
 | Method | Path           | Body                                                     |
 | ------ | -------------- | -------------------------------------------------------- |
-| GET    | `/healthz`     | Liveness. Unauthenticated, no snapshot required.         |
+| GET    | `/healthz`     | Health and snapshot availability. Unauthenticated.       |
 | GET    | `/v1/summary`  | Pre-aggregated ticket, t-shirt and merchandise numbers.  |
 | GET    | `/v1/sponsors` | Community sponsors, deduplicated by company name.        |
-| GET    | `/v1/orders`   | The cached TicketButler payload, unmodified.             |
+| GET    | `/v1/orders`   | Cached orders containing the fields modelled by the service. |
 | POST   | `/v1/refresh`  | Fetch, aggregate and store. Called by Cloud Scheduler.   |
 
 `GET /v1/summary`:
@@ -141,6 +141,15 @@ its own OIDC token in `Authorization` while the service token travels in
 served, because an old number with a warning beats no number at all. Callers should
 log the warning and carry on; a stale snapshot that stays stale means the refresh job
 is failing.
+
+`GET /v1/orders` is not a byte-for-byte TicketButler response. It returns the event,
+order, ticket, billing and answer fields modelled in `internal/ticketbutler`, wrapped
+with the same freshness metadata as the other data endpoints. Unused upstream fields,
+including the repeated question schema, are omitted to keep the snapshot smaller.
+
+`GET /healthz` returns `200` when a snapshot is available or the service is waiting
+for its first refresh. It returns `503` when the configured snapshot store cannot be
+read or contains an invalid snapshot.
 
 ## Configuration
 
@@ -237,3 +246,7 @@ than the ticket count, by design.
 
 **Refunds are ignored.** `ticket_refund` and `amount_of_refunded_tickets` are both in
 the payload and neither is read.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

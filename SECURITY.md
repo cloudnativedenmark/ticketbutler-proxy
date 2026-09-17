@@ -7,7 +7,7 @@ knowing before changing it or operating it.
 
 | Endpoint       | Content                                                                        |
 | -------------- | ------------------------------------------------------------------------------ |
-| `/v1/orders`   | The cached TicketButler payload: attendee names, email addresses, employers, buyer billing addresses and phone numbers. |
+| `/v1/orders`   | The cached subset modelled by the service: attendee names, email addresses, employers, buyer billing addresses and phone numbers. |
 | `/v1/sponsors` | Company name, contact name and email address per community sponsor.            |
 | `/v1/summary`  | Aggregates only: counts and sums per ticket group, t-shirt size and merchandise item. No names, no addresses. |
 | `/healthz`     | Nothing. This is why it is the only unauthenticated endpoint.                  |
