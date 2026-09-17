@@ -7,11 +7,9 @@
 # The job POSTs to /v1/refresh every thirty minutes. The refresh is the slow part;
 # Apps Script only ever reads the finished snapshot.
 #
-# Thirty rather than ten: ticket sales do not move fast enough for the difference to
-# matter on a spreadsheet, and the orders endpoint is currently struggling enough to
-# spend two minutes on a request before Cloudflare gives up on it. Asking less often
-# is the considerate default. Lower it with SCHEDULE= if the upstream recovers and
-# fresher numbers actually turn out to be useful.
+# Thirty minutes balances reasonably fresh spreadsheet data with the cost of fetching
+# the complete orders response. Override it with SCHEDULE when a different cadence is
+# appropriate.
 set -euo pipefail
 
 PROJECT="${PROJECT:-automation-472811}"
